@@ -376,16 +376,40 @@ func (c *Client) VerifySBOM(ctx context.Context, keyID string, signedSBOM interf
 
 	endpoint := fmt.Sprintf("/v0/sbom/%s/verify", keyID)
 	
-	requestBody := map[string]interface{}{
-		"signed_sbom": signedSBOM,
+	// Convert signed SBOM to JSON bytes
+	signedSBOMBytes, err := json.Marshal(signedSBOM)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal signed SBOM: %w", err)
 	}
 
-	resp, err := c.doRequest(ctx, "POST", endpoint, requestBody)
+	// Create multipart form
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	
+	// Create form file field with the correct field name for verification
+	part, err := writer.CreateFormFile("signedSBOM", "signed-sbom.json")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create form file: %w", err)
+	}
+	
+	// Write signed SBOM data to the form file
+	if _, err := part.Write(signedSBOMBytes); err != nil {
+		return nil, fmt.Errorf("failed to write signed SBOM data: %w", err)
+	}
+	
+	// Close the writer to finalize the form
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close form writer: %w", err)
+	}
+
+	// Make the request with multipart content
+	resp, err := c.doMultipartRequest(ctx, "POST", endpoint, &buf, writer.FormDataContentType())
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify SBOM: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// Decode the verification result
 	var result VerifyResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
