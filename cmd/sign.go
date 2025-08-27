@@ -1,0 +1,269 @@
+package cmd
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"time"
+	"path/filepath"
+	"encoding/json"
+
+	"github.com/interlynk-io/sbomasm/pkg/securesbom"
+	"github.com/spf13/cobra"
+)
+
+// signCmd represents the sign command
+var signCmd = &cobra.Command{
+	Use:   "sign",
+	Short: "Sign an SBOM using ShiftLeftCyber's SecureSBOM API",
+	Long: `Sign an SBOM document using a cryptographic key from the ShiftLeftCyber's SecureSBOM service.
+
+This service requires an API key to access ShiftLeftCybers's SecureSBOM solution. To obtain an API
+Key use the following link: https://shiftleftcyber.io/contactus
+
+The sign command takes an SBOM file, sends it to the Secure SBOM API for signing,
+and outputs the signed SBOM. The signing process adds cryptographic proof of
+authenticity and integrity to the SBOM.
+
+Examples:
+  # Sign an SBOM with a specific key
+  sbomasm sign --sbom sbom.json --key-id my-key-123 --api-key $API_KEY
+
+  # Sign from stdin and output to stdout
+  cat sbom.json | sbomasm sign --key-id my-key-123 --api-key $API_KEY
+
+  # Sign with environment variable for API key
+  export SECURE_SBOM_API_KEY=your-api-key
+  sbomasm sign --sbom sbom.json --key-id my-key-123 --output signed-sbom.json
+
+  # Sign with custom API endpoint
+  sbomasm sign --sbom sbom.json --key-id my-key-123 --base-url https://custom.api.com`,
+	RunE: runSignCommand,
+}
+
+// Sign command flags
+var (
+	signSBOMPath   string
+	signKeyID      string
+	signAPIKey     string
+	signBaseURL    string
+	signOutput     string
+	signTimeout    time.Duration
+	signRetryCount int
+	signQuiet      bool
+)
+
+func init() {
+	// Add sign command to root
+	rootCmd.AddCommand(signCmd)
+
+	// Required flags
+	signCmd.Flags().StringVar(&signSBOMPath, "sbom", "", "Path to SBOM file (use '-' for stdin)")
+	signCmd.Flags().StringVar(&signKeyID, "key-id", "", "Key ID to use for signing")
+
+	// Authentication flags
+	signCmd.Flags().StringVar(&signAPIKey, "api-key", "", "API key for authentication (or set SECURE_SBOM_API_KEY)")
+	signCmd.Flags().StringVar(&signBaseURL, "base-url", "", "Base URL for Secure SBOM API (or set SECURE_SBOM_BASE_URL)")
+
+	// Output flags
+	signCmd.Flags().StringVar(&signOutput, "output", "", "Output file path (use '-' for stdout, default: stdout)")
+	signCmd.Flags().BoolVar(&signQuiet, "quiet", false, "Suppress progress output")
+
+	// Advanced flags
+	signCmd.Flags().DurationVar(&signTimeout, "timeout", 30*time.Second, "Request timeout")
+	signCmd.Flags().IntVar(&signRetryCount, "retry", 3, "Number of retry attempts for failed requests")
+
+	// Mark required flags
+	signCmd.MarkFlagRequired("key-id")
+
+	// Set up flag dependencies and validation
+	signCmd.PreRunE = validateSignFlags
+}
+
+func validateSignFlags(cmd *cobra.Command, args []string) error {
+	// Validate key ID
+	if signKeyID == "" {
+		return fmt.Errorf("--key-id is required")
+	}
+
+	// Check for API key in flag or environment
+	if signAPIKey == "" {
+		signAPIKey = os.Getenv("SECURE_SBOM_API_KEY")
+		if signAPIKey == "" {
+			return fmt.Errorf("API key is required. Use --api-key flag or set SECURE_SBOM_API_KEY environment variable")
+		}
+	}
+
+	// Validate timeout
+	if signTimeout <= 0 {
+		return fmt.Errorf("--timeout must be positive")
+	}
+
+	// Validate retry count
+	if signRetryCount < 0 {
+		return fmt.Errorf("--retry cannot be negative")
+	}
+
+	return nil
+}
+
+func runSignCommand(cmd *cobra.Command, args []string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), signTimeout+10*time.Second)
+	defer cancel()
+
+	// Create SDK client
+	client, err := createSignClient()
+	if err != nil {
+		return fmt.Errorf("failed to create API client: %w", err)
+	}
+
+	// Load SBOM
+	if !signQuiet {
+		fmt.Fprintf(os.Stderr, "Loading SBOM...\n")
+	}
+	
+	sbom, err := loadSBOMForSigning()
+	if err != nil {
+		return fmt.Errorf("failed to load SBOM: %w", err)
+	}
+
+	// Perform health check
+	if !signQuiet {
+		fmt.Fprintf(os.Stderr, "Connecting to Secure SBOM API...\n")
+	}
+	
+	if err := client.HealthCheck(ctx); err != nil {
+		return fmt.Errorf("API health check failed: %w", err)
+	}
+
+	// Sign the SBOM
+	if !signQuiet {
+		fmt.Fprintf(os.Stderr, "Signing SBOM with key %s...\n", signKeyID)
+	}
+	
+	result, err := client.SignSBOM(ctx, signKeyID, sbom.Data())
+	if err != nil {
+		return fmt.Errorf("failed to sign SBOM: %w", err)
+	}
+
+	// Output the signed SBOM (with pretty formatting)
+	if err := outputSignedSBOM(result); err != nil {
+		return fmt.Errorf("failed to output signed SBOM: %w", err)
+	}
+
+	// Success message and metadata
+	if !signQuiet {
+		fmt.Fprintf(os.Stderr, "✓ SBOM successfully signed\n")
+		
+		// Show signature info
+		if signature := result.GetSignatureValue(); signature != "" {
+			fmt.Fprintf(os.Stderr, "  Signature: %s\n", truncateString(signature, 50))
+		}
+		
+		if algorithm := result.GetSignatureAlgorithm(); algorithm != "" {
+			fmt.Fprintf(os.Stderr, "  Algorithm: %s\n", algorithm)
+		}
+		
+		// Show where output was written
+		if signOutput != "" {
+			fmt.Fprintf(os.Stderr, "  Output: %s\n", signOutput)
+		} else {
+			fmt.Fprintf(os.Stderr, "  Output: stdout\n")
+		}
+	}
+
+	return nil
+}
+
+func createSignClient() (securesbom.ClientInterface, error) {
+	// Build configuration
+	config := securesbom.NewConfigBuilder().
+		WithAPIKey(signAPIKey).
+		WithTimeout(signTimeout).
+		FromEnv()
+
+	if signBaseURL != "" {
+		config = config.WithBaseURL(signBaseURL)
+	}
+
+	baseClient, err := config.BuildClient()
+	if err != nil {
+		return nil, err
+	}
+
+	// Wrap with retry logic if requested
+	if signRetryCount > 0 {
+		retryConfig := securesbom.RetryConfig{
+			MaxAttempts: signRetryCount,
+			InitialWait: 1 * time.Second,
+			MaxWait:     10 * time.Second,
+			Multiplier:  2.0,
+		}
+		return securesbom.WithRetryingClient(baseClient, retryConfig), nil
+	}
+
+	return baseClient, nil
+}
+
+func loadSBOMForSigning() (*securesbom.SBOM, error) {
+	if signSBOMPath == "" || signSBOMPath == "-" {
+		// Read from stdin
+		return securesbom.LoadSBOMFromReader(os.Stdin)
+	}
+
+	// Read from file
+	return securesbom.LoadSBOMFromFile(signSBOMPath)
+}
+
+// outputSignedSBOM writes the signed SBOM to the specified output location with pretty formatting
+func outputSignedSBOM(result *securesbom.SignResult) error {
+	// Pretty-print the JSON with indentation
+	prettyJSON, err := json.MarshalIndent(*result, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to format signed SBOM as JSON: %w", err)
+	}
+
+	// If no output file specified, write to stdout
+	if signOutput == "" {
+		_, err := os.Stdout.Write(prettyJSON)
+		if err != nil {
+			return fmt.Errorf("failed to write to stdout: %w", err)
+		}
+		// Add a newline at the end for better terminal output
+		fmt.Println()
+		return nil
+	}
+
+	// Create output directory if it doesn't exist
+	if err := os.MkdirAll(filepath.Dir(signOutput), 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	// Write to file with proper permissions
+	if err := os.WriteFile(signOutput, prettyJSON, 0644); err != nil {
+		return fmt.Errorf("failed to write signed SBOM to file %s: %w", signOutput, err)
+	}
+
+	return nil
+}
+
+// ClientInterface allows for easier testing and mocking
+type ClientInterface interface {
+	HealthCheck(ctx context.Context) error
+	SignSBOM(ctx context.Context, keyID string, sbom interface{}) (*securesbom.SignResult, error)
+}
+
+// truncateString truncates a string to maxLen characters with ellipsis
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		return "..."
+	}
+	return s[:maxLen-3] + "..."
+}
+
+// Ensure our clients implement the interface
+var _ ClientInterface = (*securesbom.Client)(nil)
+var _ ClientInterface = (*securesbom.RetryingClient)(nil)

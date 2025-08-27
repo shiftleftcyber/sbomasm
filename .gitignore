@@ -22,3 +22,6 @@ dist/
 _manifest/
 
 .claude/
+
+# securesbom
+samples/cdx/*signed.json
