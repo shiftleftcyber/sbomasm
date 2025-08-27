@@ -52,13 +52,14 @@ var (
 	verifyQuiet      bool
 )
 
-// VerificationOutput represents the verification result output
+// VerificationOutput represents the CLI output structure
 type VerificationOutput struct {
+	Status    string    `json:"status"`
 	Valid     bool      `json:"valid"`
 	Message   string    `json:"message,omitempty"`
 	KeyID     string    `json:"key_id,omitempty"`
+	Algorithm string    `json:"algorithm,omitempty"`
 	Timestamp time.Time `json:"timestamp,omitempty"`
-	Status    string    `json:"status"`
 }
 
 func init() {
@@ -218,6 +219,7 @@ func outputVerificationResult(result *securesbom.VerifyResult) error {
 		Valid:     result.Valid,
 		Message:   result.Message,
 		KeyID:     result.KeyID,
+		Algorithm: result.Algorithm,
 		Timestamp: result.Timestamp,
 	}
 
@@ -258,19 +260,13 @@ func outputVerificationText(output VerificationOutput) error {
 		fmt.Printf("Key ID: %s\n", output.KeyID)
 	}
 
+	if output.Algorithm != "" {
+		fmt.Printf("Algorithm: %s\n", output.Algorithm)
+	}
+
 	if !output.Timestamp.IsZero() {
 		fmt.Printf("Verified at: %s\n", output.Timestamp.Format(time.RFC3339))
 	}
 
 	return nil
 }
-
-// VerifyClientInterface allows for easier testing and mocking
-//type VerifyClientInterface interface {
-//	HealthCheck(ctx context.Context) error
-//	VerifySBOM(ctx context.Context, keyID string, signedSBOM interface{}) (*securesbom.VerifyResult, error)
-//}
-
-// Ensure our clients implement the interface
-//var _ VerifyClientInterface = (*securesbom.Client)(nil)
-//var _ VerifyClientInterface = (*securesbom.RetryingClient)(nil)

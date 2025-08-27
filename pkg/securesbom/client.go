@@ -409,11 +409,63 @@ func (c *Client) VerifySBOM(ctx context.Context, keyID string, signedSBOM interf
 	}
 	defer resp.Body.Close()
 
-	// Decode the verification result
-	var result VerifyResult
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	// Read response body for both success and error cases
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	return &result, nil
+	// Handle different HTTP status codes
+	switch resp.StatusCode {
+	case 200:
+		// Success case - signature is valid
+		var apiResp APIVerifyResponse
+		if err := json.Unmarshal(bodyBytes, &apiResp); err != nil {
+			return nil, fmt.Errorf("failed to decode success response: %w", err)
+		}
+		
+		return &VerifyResult{
+			Valid:     true,
+			Message:   apiResp.Message,
+			KeyID:     apiResp.KeyID,
+			Algorithm: apiResp.Algorithm,
+			Timestamp: time.Now(),
+		}, nil
+		
+	case 500:
+		// Error case - signature verification failed
+		// First try to parse as structured error response
+		var apiErr APIErrorResponse
+		if err := json.Unmarshal(bodyBytes, &apiErr); err != nil {
+			// If JSON parsing fails, treat the response as plain text
+			errorMsg := strings.TrimSpace(string(bodyBytes))
+			if errorMsg == "" {
+				errorMsg = "signature verification failed"
+			}
+			return &VerifyResult{
+				Valid:     false,
+				Message:   errorMsg,
+				Timestamp: time.Now(),
+			}, nil
+		}
+		
+		// Use structured error response
+		errorMessage := apiErr.Message
+		if errorMessage == "" {
+			errorMessage = apiErr.Error
+		}
+		if errorMessage == "" {
+			errorMessage = "signature verification failed"
+		}
+		
+		return &VerifyResult{
+			Valid:     false,
+			Message:   errorMessage,
+			Timestamp: time.Now(),
+		}, nil
+		
+	default:
+		// Unexpected HTTP status code
+		return nil, fmt.Errorf("unexpected response status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
 }

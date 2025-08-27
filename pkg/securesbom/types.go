@@ -46,5 +46,13 @@ type VerifyResult struct {
 	Valid     bool      `json:"valid"`
 	Message   string    `json:"message,omitempty"`
 	KeyID     string    `json:"key_id,omitempty"`
+	Algorithm string    `json:"algorithm,omitempty"`
 	Timestamp time.Time `json:"timestamp,omitempty"`
+}
+
+// APIVerifyResponse represents the actual API response structure
+type APIVerifyResponse struct {
+	Message   string `json:"message"`
+	KeyID     string `json:"key_id"`
+	Algorithm string `json:"algorithm"`
 }

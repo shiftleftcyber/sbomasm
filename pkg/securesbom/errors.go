@@ -7,3 +7,9 @@ type APIError struct {
 	Details    string `json:"details,omitempty"`
 	RequestID  string `json:"request_id,omitempty"`
 }
+
+// APIErrorResponse represents error responses from the API
+type APIErrorResponse struct {
+	Error   string `json:"error,omitempty"`
+	Message string `json:"message,omitempty"`
+}
