@@ -44,12 +44,12 @@ type Client struct {
 }
 
 type ClientInterface interface {
-    HealthCheck(ctx context.Context) error
-    ListKeys(ctx context.Context) (*KeyListResponse, error)
-    GenerateKey(ctx context.Context) (*Key, error)
-    GetPublicKey(ctx context.Context, keyID string) (string, error)
-    SignSBOM(ctx context.Context, keyID string, sbom interface{}) (*SignResult, error)
-    VerifySBOM(ctx context.Context, keyID string, signedSBOM interface{}) (*VerifyResult, error)
+	HealthCheck(ctx context.Context) error
+	ListKeys(ctx context.Context) (*KeyListResponse, error)
+	GenerateKey(ctx context.Context) (*GeneratedKey, error) // Changed return type
+	GetPublicKey(ctx context.Context, keyID string) (string, error)
+	SignSBOM(ctx context.Context, keyID string, sbom interface{}) (*SignResult, error)
+	VerifySBOM(ctx context.Context, keyID string, signedSBOM interface{}) (*VerifyResult, error)
 }
 
 func (e *APIError) Error() string {
@@ -261,39 +261,66 @@ func (c *Client) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-// ListKeys retrieves all available signing keys
+// Update Client methods
 func (c *Client) ListKeys(ctx context.Context) (*KeyListResponse, error) {
-	resp, err := c.doRequest(ctx, "GET", "/v0/keys", nil)
+	resp, err := c.doRequest(ctx, "GET", "/v0/keys?showpub=false", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list keys: %w", err)
 	}
 	defer resp.Body.Close()
 
-	var result KeyListResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse as array of API key items
+	var apiKeys []apiKeyListItem
+	if err := json.NewDecoder(resp.Body).Decode(&apiKeys); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return &result, nil
+	// Convert to GeneratedKey
+	keys := make([]GeneratedKey, len(apiKeys))
+	for i, apiKey := range apiKeys {
+		keys[i] = GeneratedKey{
+			ID:        apiKey.ID,
+			CreatedAt: apiKey.CreatedAt,
+			Algorithm: apiKey.Algorithm,
+			// PublicKey is empty for list operations
+		}
+	}
+
+	return &KeyListResponse{Keys: keys}, nil
 }
 
-// GenerateKey creates a new signing key
-func (c *Client) GenerateKey(ctx context.Context) (*Key, error) {
-	resp, err := c.doRequest(ctx, "POST", "/v0/keys", nil)
+// Update GenerateKey to return *GeneratedKey (if it wasn't already)
+func (c *Client) GenerateKey(ctx context.Context) (*GeneratedKey, error) {
+	resp, err := c.doRequest(ctx, "POST", "/v0/keys?alg=ES256", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate key: %w", err)
 	}
 	defer resp.Body.Close()
 
-	var key Key
-	if err := json.NewDecoder(resp.Body).Decode(&key); err != nil {
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var apiResp apiGenerateKeyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return &key, nil
+	return &GeneratedKey{
+		ID:        apiResp.KeyID,
+		PublicKey: apiResp.PublicKey,
+		CreatedAt: time.Now(),
+		Algorithm: "ES256",
+	}, nil
 }
 
-// GetPublicKey retrieves the public key in PEM format for the specified key ID
+// GetPublicKey retrieves the public key for a specific key ID
 func (c *Client) GetPublicKey(ctx context.Context, keyID string) (string, error) {
 	if keyID == "" {
 		return "", fmt.Errorf("keyID is required")
@@ -306,12 +333,18 @@ func (c *Client) GetPublicKey(ctx context.Context, keyID string) (string, error)
 	}
 	defer resp.Body.Close()
 
-	pemBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	return string(pemBytes), nil
+	// Read the PEM content as plain text
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	return string(body), nil
 }
 
 func (c *Client) SignSBOM(ctx context.Context, keyID string, sbom interface{}) (*SignResult, error) {

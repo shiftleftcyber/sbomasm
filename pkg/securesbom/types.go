@@ -18,27 +18,36 @@ type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// Key represents a cryptographic key in the system
-type Key struct {
+// Keep GeneratedKey as the single key type
+type GeneratedKey struct {
 	ID        string    `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
-	Algorithm string    `json:"algorithm,omitempty"`
+	Algorithm string    `json:"algorithm"`
+	PublicKey string    `json:"public_key,omitempty"` // Only populated for new keys
 }
 
-// KeyListResponse contains the response from listing keys
 type KeyListResponse struct {
-	Keys []Key `json:"keys"`
+	Keys []GeneratedKey `json:"keys"` // Changed from []Key to []GeneratedKey
 }
 
-// SignResult contains the result of a sign operation
-/*
-type SignResult struct {
-	SignedSBOM interface{} `json:"signed_sbom"`
-	Signature  string      `json:"signature,omitempty"`
-	KeyID      string      `json:"key_id,omitempty"`
-	Timestamp  time.Time   `json:"timestamp,omitempty"`
+// Internal API response types (keep these for parsing)
+type apiKeyListItem struct {
+	ID        string    `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	Algorithm string    `json:"algorithm"`
 }
-*/
+
+type apiGenerateKeyResponse struct {
+	KeyID     string `json:"key_id"`
+	PublicKey string `json:"public_key"`
+}
+
+// GenerateKeyResponse represents the response from generating a new key
+type GenerateKeyResponse struct {
+	KeyID     string `json:"key_id"`
+	PublicKey string `json:"public_key"`
+}
+
 type SignResult map[string]interface{}
 
 // VerifyResult contains the result of a verify operation

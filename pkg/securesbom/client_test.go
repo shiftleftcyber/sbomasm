@@ -414,7 +414,7 @@ func TestClient_ListKeys(t *testing.T) {
 		{
 			name: "successful list keys",
 			mockResponse: createMockResponse(200, KeyListResponse{
-				Keys: []Key{
+				Keys: []GeneratedKey{
 					{ID: "key-1", CreatedAt: time.Now()},
 					{ID: "key-2", CreatedAt: time.Now()},
 				},
@@ -495,7 +495,7 @@ func TestClient_GenerateKey(t *testing.T) {
 	}{
 		{
 			name: "successful key generation",
-			mockResponse: createMockResponse(201, Key{
+			mockResponse: createMockResponse(201, GeneratedKey{
 				ID:        "key-123",
 				CreatedAt: time.Now(),
 			}),

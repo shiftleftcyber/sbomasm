@@ -224,7 +224,7 @@ func (r *RetryingClient) HealthCheck(ctx context.Context) error {
 	})
 }
 
-// ListKeys lists keys with retries
+// Update RetryingClient methods to use GeneratedKey
 func (r *RetryingClient) ListKeys(ctx context.Context) (*KeyListResponse, error) {
 	var result *KeyListResponse
 	err := WithRetry(ctx, r.retryConfig, func() error {
@@ -235,9 +235,9 @@ func (r *RetryingClient) ListKeys(ctx context.Context) (*KeyListResponse, error)
 	return result, err
 }
 
-// GenerateKey generates a key with retries
-func (r *RetryingClient) GenerateKey(ctx context.Context) (*Key, error) {
-	var result *Key
+// Update GenerateKey to return *GeneratedKey (change from *Key)
+func (r *RetryingClient) GenerateKey(ctx context.Context) (*GeneratedKey, error) {
+	var result *GeneratedKey
 	err := WithRetry(ctx, r.retryConfig, func() error {
 		var err error
 		result, err = r.client.GenerateKey(ctx)
@@ -257,7 +257,6 @@ func (r *RetryingClient) GetPublicKey(ctx context.Context, keyID string) (string
 	return result, err
 }
 
-// SignSBOM signs an SBOM with retries
 func (r *RetryingClient) SignSBOM(ctx context.Context, keyID string, sbom interface{}) (*SignResult, error) {
 	var result *SignResult
 	err := WithRetry(ctx, r.retryConfig, func() error {
