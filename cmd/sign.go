@@ -247,12 +247,6 @@ func outputSignedSBOM(result *securesbom.SignResult) error {
 	return nil
 }
 
-// ClientInterface allows for easier testing and mocking
-type ClientInterface interface {
-	HealthCheck(ctx context.Context) error
-	SignSBOM(ctx context.Context, keyID string, sbom interface{}) (*securesbom.SignResult, error)
-}
-
 // truncateString truncates a string to maxLen characters with ellipsis
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
@@ -263,7 +257,3 @@ func truncateString(s string, maxLen int) string {
 	}
 	return s[:maxLen-3] + "..."
 }
-
-// Ensure our clients implement the interface
-var _ ClientInterface = (*securesbom.Client)(nil)
-var _ ClientInterface = (*securesbom.RetryingClient)(nil)

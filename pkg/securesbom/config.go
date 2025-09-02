@@ -10,17 +10,14 @@ import (
 	"math"
 )
 
-// ConfigBuilder provides a fluent interface for building client configurations
 type ConfigBuilder struct {
 	config Config
 }
 
-// SBOM represents an SBOM document
 type SBOM struct {
 	data interface{}
 }
 
-// RetryConfig configures retry behavior for operations
 type RetryConfig struct {
 	MaxAttempts int
 	InitialWait time.Duration
@@ -28,33 +25,27 @@ type RetryConfig struct {
 	Multiplier  float64
 }
 
-// ClientOption represents a configuration option for the client
 type ClientOption func(*Config)
 
-// RetryingClient wraps the base client with retry logic
 type RetryingClient struct {
 	client      *Client
 	retryConfig RetryConfig
 }
 
-// NewConfigBuilder creates a new configuration builder
 func NewConfigBuilder() *ConfigBuilder {
 	return &ConfigBuilder{}
 }
 
-// WithBaseURL sets the API base URL
 func (b *ConfigBuilder) WithBaseURL(baseURL string) *ConfigBuilder {
 	b.config.BaseURL = baseURL
 	return b
 }
 
-// WithAPIKey sets the API key
 func (b *ConfigBuilder) WithAPIKey(apiKey string) *ConfigBuilder {
 	b.config.APIKey = apiKey
 	return b
 }
 
-// WithTimeout sets the request timeout
 func (b *ConfigBuilder) WithTimeout(timeout time.Duration) *ConfigBuilder {
 	b.config.Timeout = timeout
 	return b
@@ -70,7 +61,6 @@ func (b *ConfigBuilder) WithUserAgent(userAgent string) *ConfigBuilder {
 	return b
 }
 
-// FromEnv populates configuration from environment variables
 func (b *ConfigBuilder) FromEnv() *ConfigBuilder {
 	if apiKey := os.Getenv("SECURE_SBOM_API_KEY"); apiKey != "" {
 		b.config.APIKey = apiKey
@@ -81,24 +71,20 @@ func (b *ConfigBuilder) FromEnv() *ConfigBuilder {
 	return b
 }
 
-// Build creates the final configuration
 func (b *ConfigBuilder) Build() *Config {
 	// Return a copy to prevent external mutation
 	config := b.config
 	return &config
 }
 
-// BuildClient creates a client with the built configuration
 func (b *ConfigBuilder) BuildClient() (*Client, error) {
 	return NewClient(b.Build())
 }
 
-// NewSBOM creates a new SBOM from data
 func NewSBOM(data interface{}) *SBOM {
 	return &SBOM{data: data}
 }
 
-// LoadSBOMFromReader loads an SBOM from an io.Reader
 func LoadSBOMFromReader(reader io.Reader) (*SBOM, error) {
 	data, err := io.ReadAll(reader)
 	if err != nil {
@@ -117,7 +103,6 @@ func LoadSBOMFromReader(reader io.Reader) (*SBOM, error) {
 	return &SBOM{data: sbomData}, nil
 }
 
-// LoadSBOMFromFile loads an SBOM from a file
 func LoadSBOMFromFile(filePath string) (*SBOM, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -128,19 +113,16 @@ func LoadSBOMFromFile(filePath string) (*SBOM, error) {
 	return LoadSBOMFromReader(file)
 }
 
-// Data returns the raw SBOM data
 func (s *SBOM) Data() interface{} {
 	return s.data
 }
 
-// WriteToWriter writes the SBOM to an io.Writer
 func (s *SBOM) WriteToWriter(writer io.Writer) error {
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(s.data)
 }
 
-// WriteToFile writes the SBOM to a file
 func (s *SBOM) WriteToFile(filePath string) error {
 	file, err := os.Create(filePath)
 	if err != nil {
@@ -151,7 +133,6 @@ func (s *SBOM) WriteToFile(filePath string) error {
 	return s.WriteToWriter(file)
 }
 
-// String returns a JSON string representation of the SBOM
 func (s *SBOM) String() string {
 	data, err := json.MarshalIndent(s.data, "", "  ")
 	if err != nil {
@@ -160,7 +141,6 @@ func (s *SBOM) String() string {
 	return string(data)
 }
 
-// DefaultRetryConfig returns a sensible default retry configuration
 func DefaultRetryConfig() RetryConfig {
 	return RetryConfig{
 		MaxAttempts: 3,
@@ -170,7 +150,6 @@ func DefaultRetryConfig() RetryConfig {
 	}
 }
 
-// WithRetry wraps a function to retry on temporary failures
 func WithRetry(ctx context.Context, config RetryConfig, fn func() error) error {
 	var lastErr error
 	
@@ -209,7 +188,6 @@ func WithRetry(ctx context.Context, config RetryConfig, fn func() error) error {
 	return fmt.Errorf("operation failed after %d attempts: %w", config.MaxAttempts, lastErr)
 }
 
-// WithRetryingClient wraps a client with retry logic
 func WithRetryingClient(client *Client, retryConfig RetryConfig) *RetryingClient {
 	return &RetryingClient{
 		client:      client,
@@ -217,14 +195,12 @@ func WithRetryingClient(client *Client, retryConfig RetryConfig) *RetryingClient
 	}
 }
 
-// HealthCheck performs a health check with retries
 func (r *RetryingClient) HealthCheck(ctx context.Context) error {
 	return WithRetry(ctx, r.retryConfig, func() error {
 		return r.client.HealthCheck(ctx)
 	})
 }
 
-// Update RetryingClient methods to use GeneratedKey
 func (r *RetryingClient) ListKeys(ctx context.Context) (*KeyListResponse, error) {
 	var result *KeyListResponse
 	err := WithRetry(ctx, r.retryConfig, func() error {
@@ -235,7 +211,6 @@ func (r *RetryingClient) ListKeys(ctx context.Context) (*KeyListResponse, error)
 	return result, err
 }
 
-// Update GenerateKey to return *GeneratedKey (change from *Key)
 func (r *RetryingClient) GenerateKey(ctx context.Context) (*GeneratedKey, error) {
 	var result *GeneratedKey
 	err := WithRetry(ctx, r.retryConfig, func() error {
@@ -246,7 +221,6 @@ func (r *RetryingClient) GenerateKey(ctx context.Context) (*GeneratedKey, error)
 	return result, err
 }
 
-// GetPublicKey gets a public key with retries
 func (r *RetryingClient) GetPublicKey(ctx context.Context, keyID string) (string, error) {
 	var result string
 	err := WithRetry(ctx, r.retryConfig, func() error {
@@ -267,7 +241,6 @@ func (r *RetryingClient) SignSBOM(ctx context.Context, keyID string, sbom interf
 	return result, err
 }
 
-// VerifySBOM verifies an SBOM with retries
 func (r *RetryingClient) VerifySBOM(ctx context.Context, keyID string, signedSBOM interface{}) (*VerifyResult, error) {
 	var result *VerifyResult
 	err := WithRetry(ctx, r.retryConfig, func() error {

@@ -283,7 +283,7 @@ func runKeyPublicCommand(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func createKeyClient() (KeyClientInterface, error) {
+func createKeyClient() (securesbom.ClientInterface, error) {
 	// Build configuration
 	config := securesbom.NewConfigBuilder().
 		WithAPIKey(keyAPIKey).
@@ -362,15 +362,3 @@ func outputGeneratedKeyTable(key *securesbom.GeneratedKey) error {
 	fmt.Printf("  sbomasm sign --sbom your-sbom.json --key-id %s\n", key.ID)
 	return nil
 }
-
-// KeyClientInterface allows for easier testing and mocking
-type KeyClientInterface interface {
-	HealthCheck(ctx context.Context) error
-	ListKeys(ctx context.Context) (*securesbom.KeyListResponse, error)
-	GenerateKey(ctx context.Context) (*securesbom.GeneratedKey, error)
-	GetPublicKey(ctx context.Context, keyID string) (string, error)
-}
-
-// Ensure our clients implement the interface
-var _ KeyClientInterface = (*securesbom.Client)(nil)
-var _ KeyClientInterface = (*securesbom.RetryingClient)(nil)

@@ -33,11 +33,9 @@ import (
 
 const (
 	DefaultTimeout = 30 * time.Second
-	
 	UserAgent = "secure-sbom-sdk-go/1.0"
 )
 
-// Client provides access to the Secure SBOM API
 type Client struct {
 	config     *Config
 	httpClient HTTPClient
@@ -46,7 +44,7 @@ type Client struct {
 type ClientInterface interface {
 	HealthCheck(ctx context.Context) error
 	ListKeys(ctx context.Context) (*KeyListResponse, error)
-	GenerateKey(ctx context.Context) (*GeneratedKey, error) // Changed return type
+	GenerateKey(ctx context.Context) (*GeneratedKey, error)
 	GetPublicKey(ctx context.Context, keyID string) (string, error)
 	SignSBOM(ctx context.Context, keyID string, sbom interface{}) (*SignResult, error)
 	VerifySBOM(ctx context.Context, keyID string, signedSBOM interface{}) (*VerifyResult, error)
@@ -64,7 +62,6 @@ func (e *APIError) Temporary() bool {
 	return e.StatusCode >= 500 || e.StatusCode == 429
 }
 
-// NewClient creates a new Secure SBOM API client
 func NewClient(config *Config) (*Client, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is required")
@@ -74,10 +71,8 @@ func NewClient(config *Config) (*Client, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Create a copy to avoid mutation
 	cfg := *config
 	
-	// Set defaults
 	if cfg.Timeout == 0 {
 		cfg.Timeout = DefaultTimeout
 	}
@@ -85,7 +80,6 @@ func NewClient(config *Config) (*Client, error) {
 		cfg.UserAgent = UserAgent
 	}
 	
-	// Create HTTP client if not provided
 	var httpClient HTTPClient = cfg.HTTPClient
 	if httpClient == nil {
 		httpClient = &http.Client{
@@ -99,7 +93,6 @@ func NewClient(config *Config) (*Client, error) {
 	}, nil
 }
 
-// validateConfig validates the client configuration
 func validateConfig(config *Config) error {
 	if config.APIKey == "" {
 		return fmt.Errorf("APIKey is required")
@@ -109,7 +102,6 @@ func validateConfig(config *Config) error {
 		return fmt.Errorf("BaseURL is required")
 	}
 	
-	// Validate base URL format
 	if _, err := url.Parse(config.BaseURL); err != nil {
 		return fmt.Errorf("invalid BaseURL: %w", err)
 	}
@@ -121,14 +113,12 @@ func validateConfig(config *Config) error {
 	return nil
 }
 
-// buildURL constructs a full URL for the given endpoint
 func (c *Client) buildURL(endpoint string) string {
 	baseURL := strings.TrimSuffix(c.config.BaseURL, "/")
 	endpoint = strings.TrimPrefix(endpoint, "/")
 	return fmt.Sprintf("%s/%s", baseURL, endpoint)
 }
 
-// doRequest performs an HTTP request with proper authentication and error handling
 func (c *Client) doRequest(ctx context.Context, method, endpoint string, body interface{}) (*http.Response, error) {
 	url := c.buildURL(endpoint)
 	
@@ -195,7 +185,6 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	return resp, nil
 }
 
-// doMultipartRequest performs an HTTP request with multipart content
 func (c *Client) doMultipartRequest(ctx context.Context, method, endpoint string, body io.Reader, contentType string) (*http.Response, error) {
 	url := c.buildURL(endpoint)
 
@@ -252,7 +241,7 @@ func (c *Client) doMultipartRequest(ctx context.Context, method, endpoint string
 
 // HealthCheck verifies that the API is accessible and responding
 func (c *Client) HealthCheck(ctx context.Context) error {
-	resp, err := c.doRequest(ctx, "GET", "/infra/healthcheck", nil)
+	resp, err := c.doRequest(ctx, "GET", API_ENDPOINT_HEALTHCHECK, nil)
 	if err != nil {
 		return fmt.Errorf("health check failed: %w", err)
 	}
@@ -294,7 +283,6 @@ func (c *Client) ListKeys(ctx context.Context) (*KeyListResponse, error) {
 	return &KeyListResponse{Keys: keys}, nil
 }
 
-// Update GenerateKey to return *GeneratedKey (if it wasn't already)
 func (c *Client) GenerateKey(ctx context.Context) (*GeneratedKey, error) {
 	resp, err := c.doRequest(ctx, "POST", "/v0/keys?alg=ES256", nil)
 	if err != nil {
@@ -357,33 +345,27 @@ func (c *Client) SignSBOM(ctx context.Context, keyID string, sbom interface{}) (
 
 	endpoint := fmt.Sprintf("/v0/sbom/%s/sign?sigType=simple", keyID)
 	
-	// Convert SBOM to JSON bytes
 	sbomBytes, err := json.Marshal(sbom)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal SBOM: %w", err)
 	}
 
-	// Create multipart form
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 	
-	// Create form file field
 	part, err := writer.CreateFormFile("sbom", "sbom.json")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create form file: %w", err)
 	}
 	
-	// Write SBOM data to the form file
 	if _, err := part.Write(sbomBytes); err != nil {
 		return nil, fmt.Errorf("failed to write SBOM data: %w", err)
 	}
 	
-	// Close the writer to finalize the form
 	if err := writer.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close form writer: %w", err)
 	}
 
-	// Make the request with multipart content
 	resp, err := c.doMultipartRequest(ctx, "POST", endpoint, &buf, writer.FormDataContentType())
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign SBOM: %w", err)
@@ -409,46 +391,38 @@ func (c *Client) VerifySBOM(ctx context.Context, keyID string, signedSBOM interf
 
 	endpoint := fmt.Sprintf("/v0/sbom/%s/verify", keyID)
 	
-	// Convert signed SBOM to JSON bytes
 	signedSBOMBytes, err := json.Marshal(signedSBOM)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal signed SBOM: %w", err)
 	}
 
-	// Create multipart form
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 	
-	// Create form file field with the correct field name for verification
 	part, err := writer.CreateFormFile("signedSBOM", "signed-sbom.json")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create form file: %w", err)
 	}
 	
-	// Write signed SBOM data to the form file
 	if _, err := part.Write(signedSBOMBytes); err != nil {
 		return nil, fmt.Errorf("failed to write signed SBOM data: %w", err)
 	}
 	
-	// Close the writer to finalize the form
 	if err := writer.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close form writer: %w", err)
 	}
 
-	// Make the request with multipart content
 	resp, err := c.doMultipartRequest(ctx, "POST", endpoint, &buf, writer.FormDataContentType())
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify SBOM: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read response body for both success and error cases
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	// Handle different HTTP status codes
 	switch resp.StatusCode {
 	case 200:
 		// Success case - signature is valid
@@ -482,7 +456,6 @@ func (c *Client) VerifySBOM(ctx context.Context, keyID string, signedSBOM interf
 			}, nil
 		}
 		
-		// Use structured error response
 		errorMessage := apiErr.Message
 		if errorMessage == "" {
 			errorMessage = apiErr.Error
@@ -498,7 +471,6 @@ func (c *Client) VerifySBOM(ctx context.Context, keyID string, signedSBOM interf
 		}, nil
 		
 	default:
-		// Unexpected HTTP status code
 		return nil, fmt.Errorf("unexpected response status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 }

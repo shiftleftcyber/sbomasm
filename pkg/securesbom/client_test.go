@@ -438,7 +438,7 @@ func TestClient_ListKeys(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := &MockHTTPClient{
 				DoFunc: func(req *http.Request) (*http.Response, error) {
-					expectedURL := "https://api.example.com/v0/keys"
+					expectedURL := "https://api.example.com/v0/keys?showpub=false"
 					if req.URL.String() != expectedURL {
 						t.Errorf("expected URL %q, got %q", expectedURL, req.URL.String())
 					}
@@ -495,9 +495,10 @@ func TestClient_GenerateKey(t *testing.T) {
 	}{
 		{
 			name: "successful key generation",
-			mockResponse: createMockResponse(201, GeneratedKey{
-				ID:        "key-123",
-				CreatedAt: time.Now(),
+			// Mock the actual API response format (apiGenerateKeyResponse)
+			mockResponse: createMockResponse(200, map[string]interface{}{
+				"keyID":     "key-123",
+				"publicKey": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZI...\n-----END PUBLIC KEY-----",
 			}),
 			expectError: false,
 		},
@@ -507,8 +508,8 @@ func TestClient_GenerateKey(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:         "invalid JSON response",
-			mockResponse: createMockResponse(201, "invalid json"),
+			name:         "API error response",
+			mockResponse: createMockResponse(400, map[string]string{"error": "invalid request"}),
 			expectError:  true,
 		},
 	}
@@ -517,10 +518,11 @@ func TestClient_GenerateKey(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := &MockHTTPClient{
 				DoFunc: func(req *http.Request) (*http.Response, error) {
-					expectedURL := "https://api.example.com/v0/keys"
+					expectedURL := "https://api.example.com/v0/keys?alg=ES256"
 					if req.URL.String() != expectedURL {
 						t.Errorf("expected URL %q, got %q", expectedURL, req.URL.String())
 					}
+
 					if req.Method != "POST" {
 						t.Errorf("expected POST method, got %q", req.Method)
 					}
@@ -559,6 +561,12 @@ func TestClient_GenerateKey(t *testing.T) {
 				}
 				if result.ID == "" {
 					t.Error("expected key ID to be non-empty")
+				}
+				if result.Algorithm != "ES256" {
+					t.Errorf("expected algorithm to be 'ES256', got %q", result.Algorithm)
+				}
+				if result.CreatedAt.IsZero() {
+					t.Error("expected CreatedAt to be set")
 				}
 			}
 		})
@@ -660,8 +668,10 @@ func TestClient_SignSBOM(t *testing.T) {
 			keyID: "key-123",
 			sbom:  map[string]string{"name": "test-sbom"},
 			mockResponse: createMockResponse(200, SignResult{
-				SignedSBOM: map[string]interface{}{"signed": true},
-				Signature:  "signature-data",
+				"signed_sbom": map[string]interface{}{"signed": true},
+				"signature":   "signature-data",
+				"algorithm":   "ES256",
+				"key_id":      "key-123",
 			}),
 			expectError: false,
 		},
@@ -691,7 +701,7 @@ func TestClient_SignSBOM(t *testing.T) {
 			mockClient := &MockHTTPClient{
 				DoFunc: func(req *http.Request) (*http.Response, error) {
 					if tt.keyID != "" && tt.sbom != nil {
-						expectedURL := fmt.Sprintf("https://api.example.com/v0/sbom/%s/sign", tt.keyID)
+						expectedURL := fmt.Sprintf("https://api.example.com/v0/sbom/%s/sign?sigType=simple", tt.keyID)
 						if req.URL.String() != expectedURL {
 							t.Errorf("expected URL %q, got %q", expectedURL, req.URL.String())
 						}
