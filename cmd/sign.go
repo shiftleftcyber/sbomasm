@@ -27,23 +27,25 @@ authenticity and integrity to the SBOM.
 
 Examples:
   # Sign an SBOM with a specific key
-  sbomasm sign --sbom sbom.json --key-id my-key-123 --api-key $API_KEY
+  sbomasm sign --key-id my-key-123 --api-key $API_KEY sbom.json
 
   # Sign from stdin and output to stdout
   cat sbom.json | sbomasm sign --key-id my-key-123 --api-key $API_KEY
 
   # Sign with environment variable for API key
   export SECURE_SBOM_API_KEY=your-api-key
-  sbomasm sign --sbom sbom.json --key-id my-key-123 --output signed-sbom.json
+  sbomasm sign --key-id my-key-123 --output signed-sbom.json sbom.json
 
   # Sign with custom API endpoint
-  sbomasm sign --sbom sbom.json --key-id my-key-123 --base-url https://custom.api.com`,
-	RunE: runSignCommand,
+  sbomasm sign --key-id my-key-123 --base-url https://custom.api.com sbom.json`, 
+  	Args:         cobra.ExactArgs(1),
+  	SilenceUsage: true,
+  	PreRunE:      validateSignFlags,
+  	RunE:         runSignCommand,	
 }
 
 // Sign command flags
 var (
-	signSBOMPath   string
 	signKeyID      string
 	signAPIKey     string
 	signBaseURL    string
@@ -54,11 +56,9 @@ var (
 )
 
 func init() {
-	// Add sign command to root
 	rootCmd.AddCommand(signCmd)
 
 	// Required flags
-	signCmd.Flags().StringVar(&signSBOMPath, "sbom", "", "Path to SBOM file (use '-' for stdin)")
 	signCmd.Flags().StringVar(&signKeyID, "key-id", "", "Key ID to use for signing")
 
 	// Authentication flags
@@ -75,12 +75,21 @@ func init() {
 
 	// Mark required flags
 	signCmd.MarkFlagRequired("key-id")
-
-	// Set up flag dependencies and validation
-	signCmd.PreRunE = validateSignFlags
 }
 
 func validateSignFlags(cmd *cobra.Command, args []string) error {
+	// Validate input file argument
+	if len(args) == 0 {
+		return fmt.Errorf("input file is required")
+	}
+
+	// Check if input file exists (unless it's stdin)
+	if args[0] != "-" {
+		if _, err := os.Stat(args[0]); err != nil {
+			return fmt.Errorf("invalid input file: %v", err)
+		}
+	}
+	
 	// Validate key ID
 	if signKeyID == "" {
 		return fmt.Errorf("--key-id is required")
@@ -122,7 +131,7 @@ func runSignCommand(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "Loading SBOM...\n")
 	}
 	
-	sbom, err := loadSBOMForSigning()
+	sbom, err := loadSBOMForSigning(args[0])
 	if err != nil {
 		return fmt.Errorf("failed to load SBOM: %w", err)
 	}
@@ -205,14 +214,12 @@ func createSignClient() (securesbom.ClientInterface, error) {
 	return baseClient, nil
 }
 
-func loadSBOMForSigning() (*securesbom.SBOM, error) {
-	if signSBOMPath == "" || signSBOMPath == "-" {
-		// Read from stdin
+func loadSBOMForSigning(inputFile string) (*securesbom.SBOM, error) {
+	if inputFile == "-" {
 		return securesbom.LoadSBOMFromReader(os.Stdin)
 	}
 
-	// Read from file
-	return securesbom.LoadSBOMFromFile(signSBOMPath)
+	return securesbom.LoadSBOMFromFile(inputFile)
 }
 
 // outputSignedSBOM writes the signed SBOM to the specified output location with pretty formatting

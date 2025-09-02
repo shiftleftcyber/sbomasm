@@ -14,7 +14,7 @@ import (
 
 // keyCmd represents the key management command group
 var keyCmd = &cobra.Command{
-	Use:   "key",
+	Use:   "signingkey",
 	Short: "Manage cryptographic keys for SBOM signing",
 	Long: `Manage cryptographic keys used for signing and verifying SBOMs.
 
@@ -38,13 +38,13 @@ including their IDs, creation dates, and algorithms.
 
 Examples:
   # List keys in table format
-  sbomasm key list --api-key $API_KEY
+  sbomasm signingkey list --api-key $API_KEY
 
   # List keys in JSON format
-  sbomasm key list --output json
+  sbomasm signingkey list --output json
 
   # List keys with custom API endpoint
-  sbomasm key list --base-url https://custom.api.com`,
+  sbomasm signingkey list --base-url https://custom.api.com`,
 	RunE: runKeyListCommand,
 }
 
@@ -60,10 +60,10 @@ be referenced by its ID for signing operations.
 
 Examples:
   # Generate a new key
-  sbomasm key generate --api-key $API_KEY
+  sbomasm signingkey generate --api-key $API_KEY
 
   # Generate a key and save details to file
-  sbomasm key generate --output key-details.json`,
+  sbomasm signingkey generate --output key-details.json`,
 	RunE: runKeyGenerateCommand,
 }
 
@@ -79,10 +79,10 @@ SBOMs signed with the corresponding private key.
 
 Examples:
   # Get public key
-  sbomasm key public my-key-123 --api-key $API_KEY
+  sbomasm signingkey public my-key-123 --api-key $API_KEY
 
   # Save public key to file
-  sbomasm key public my-key-123 --output public.pem`,
+  sbomasm signingkey public my-key-123 --output public.pem`,
 	Args: cobra.ExactArgs(1),
 	RunE: runKeyPublicCommand,
 }

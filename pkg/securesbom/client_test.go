@@ -413,10 +413,17 @@ func TestClient_ListKeys(t *testing.T) {
 	}{
 		{
 			name: "successful list keys",
-			mockResponse: createMockResponse(200, KeyListResponse{
-				Keys: []GeneratedKey{
-					{ID: "key-1", CreatedAt: time.Now()},
-					{ID: "key-2", CreatedAt: time.Now()},
+			// Mock the actual API response format - array of apiKeyListItem
+			mockResponse: createMockResponse(200, []map[string]interface{}{
+				{
+					"id":         "key-1",
+					"created_at": "2023-01-01T12:00:00Z",
+					"algorithm":  "ES256",
+				},
+				{
+					"id":         "key-2", 
+					"created_at": "2023-01-02T12:00:00Z",
+					"algorithm":  "ES256",
 				},
 			}),
 			expectError:  false,
@@ -497,8 +504,8 @@ func TestClient_GenerateKey(t *testing.T) {
 			name: "successful key generation",
 			// Mock the actual API response format (apiGenerateKeyResponse)
 			mockResponse: createMockResponse(200, map[string]interface{}{
-				"keyID":     "key-123",
-				"publicKey": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZI...\n-----END PUBLIC KEY-----",
+				"key_id":     "key-123",
+				"public_key": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZI...\n-----END PUBLIC KEY-----",
 			}),
 			expectError: false,
 		},

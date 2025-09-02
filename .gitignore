@@ -25,3 +25,5 @@ _manifest/
 
 # securesbom
 samples/cdx/*signed.json
+
+test_commands.txt

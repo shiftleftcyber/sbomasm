@@ -284,7 +284,7 @@ func (c *Client) ListKeys(ctx context.Context) (*KeyListResponse, error) {
 }
 
 func (c *Client) GenerateKey(ctx context.Context) (*GeneratedKey, error) {
-	resp, err := c.doRequest(ctx, "POST", "/v0/keys?alg=ES256", nil)
+	resp, err := c.doRequest(ctx, HTTP_METHOD_POST, API_VERSION + API_ENDPOINT_KEYS + "?alg=ES256", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate key: %w", err)
 	}
