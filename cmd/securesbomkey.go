@@ -14,9 +14,12 @@ import (
 
 // keyCmd represents the key management command group
 var keyCmd = &cobra.Command{
-	Use:   "signingkey",
-	Short: "Manage cryptographic keys for SBOM signing",
+	Use:   "securesbomkey",
+	Short: "Manage cryptographic keys in ShiftLeftCyber's SecureSBOM API service",
 	Long: `Manage cryptographic keys used for signing and verifying SBOMs.
+
+This service requires an API key to access ShiftLeftCybers's SecureSBOM solution. To obtain an API
+Key use the following link: https://shiftleftcyber.io/contactus
 
 This command provides subcommands for listing existing keys, generating new keys,
 and retrieving public keys from the Secure SBOM service.
@@ -342,13 +345,13 @@ func outputKeysTable(result *securesbom.KeyListResponse) error {
 	return nil
 }
 
-func outputGeneratedKeyJSON(key *securesbom.GeneratedKey) error {
+func outputGeneratedKeyJSON(key *securesbom.GenerateKeyCMDResponse) error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(key)
 }
 
-func outputGeneratedKeyTable(key *securesbom.GeneratedKey) error {
+func outputGeneratedKeyTable(key *securesbom.GenerateKeyCMDResponse) error {
 	fmt.Printf("✓ New key generated successfully\n")
 	fmt.Printf("Key ID: %s\n", key.ID)
 	fmt.Printf("Created: %s\n", key.CreatedAt.Format(time.RFC3339))
@@ -359,6 +362,6 @@ func outputGeneratedKeyTable(key *securesbom.GeneratedKey) error {
 		fmt.Printf("\nPublic Key:\n%s\n", key.PublicKey)
 	}
 	fmt.Printf("\nYou can now use this key ID for signing SBOMs:\n")
-	fmt.Printf("  sbomasm sign --sbom your-sbom.json --key-id %s\n", key.ID)
+	fmt.Printf("  sbomasm sign --key-id %s your-sbom.json\n", key.ID)
 	return nil
 }

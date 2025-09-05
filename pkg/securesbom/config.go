@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"time"
-	"math"
 )
 
 type ConfigBuilder struct {
@@ -67,6 +67,8 @@ func (b *ConfigBuilder) FromEnv() *ConfigBuilder {
 	}
 	if baseURL := os.Getenv("SECURE_SBOM_BASE_URL"); baseURL != "" {
 		b.config.BaseURL = baseURL
+	} else {
+		b.config.BaseURL = DEFAULT_SECURE_SBOM_BASE_URL
 	}
 	return b
 }
@@ -152,28 +154,28 @@ func DefaultRetryConfig() RetryConfig {
 
 func WithRetry(ctx context.Context, config RetryConfig, fn func() error) error {
 	var lastErr error
-	
+
 	for attempt := 0; attempt < config.MaxAttempts; attempt++ {
 		if err := fn(); err != nil {
 			lastErr = err
-			
+
 			// Check if error is retryable
 			if apiErr, ok := err.(*APIError); ok && !apiErr.Temporary() {
 				return err // Don't retry non-temporary errors
 			}
-			
+
 			// Don't wait after the last attempt
 			if attempt == config.MaxAttempts-1 {
 				break
 			}
-			
+
 			// Calculate wait time with exponential backoff
-			waitTime := time.Duration(float64(config.InitialWait) * 
+			waitTime := time.Duration(float64(config.InitialWait) *
 				math.Pow(config.Multiplier, float64(attempt)))
 			if waitTime > config.MaxWait {
 				waitTime = config.MaxWait
 			}
-			
+
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -184,7 +186,7 @@ func WithRetry(ctx context.Context, config RetryConfig, fn func() error) error {
 			return nil // Success
 		}
 	}
-	
+
 	return fmt.Errorf("operation failed after %d attempts: %w", config.MaxAttempts, lastErr)
 }
 
@@ -211,8 +213,8 @@ func (r *RetryingClient) ListKeys(ctx context.Context) (*KeyListResponse, error)
 	return result, err
 }
 
-func (r *RetryingClient) GenerateKey(ctx context.Context) (*GeneratedKey, error) {
-	var result *GeneratedKey
+func (r *RetryingClient) GenerateKey(ctx context.Context) (*GenerateKeyCMDResponse, error) {
+	var result *GenerateKeyCMDResponse
 	err := WithRetry(ctx, r.retryConfig, func() error {
 		var err error
 		result, err = r.client.GenerateKey(ctx)
@@ -231,8 +233,8 @@ func (r *RetryingClient) GetPublicKey(ctx context.Context, keyID string) (string
 	return result, err
 }
 
-func (r *RetryingClient) SignSBOM(ctx context.Context, keyID string, sbom interface{}) (*SignResult, error) {
-	var result *SignResult
+func (r *RetryingClient) SignSBOM(ctx context.Context, keyID string, sbom interface{}) (*SignResultAPIResponse, error) {
+	var result *SignResultAPIResponse
 	err := WithRetry(ctx, r.retryConfig, func() error {
 		var err error
 		result, err = r.client.SignSBOM(ctx, keyID, sbom)
@@ -241,8 +243,8 @@ func (r *RetryingClient) SignSBOM(ctx context.Context, keyID string, sbom interf
 	return result, err
 }
 
-func (r *RetryingClient) VerifySBOM(ctx context.Context, keyID string, signedSBOM interface{}) (*VerifyResult, error) {
-	var result *VerifyResult
+func (r *RetryingClient) VerifySBOM(ctx context.Context, keyID string, signedSBOM interface{}) (*VerifyResultCMDResponse, error) {
+	var result *VerifyResultCMDResponse
 	err := WithRetry(ctx, r.retryConfig, func() error {
 		var err error
 		result, err = r.client.VerifySBOM(ctx, keyID, signedSBOM)

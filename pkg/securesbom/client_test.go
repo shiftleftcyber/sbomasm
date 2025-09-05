@@ -277,7 +277,7 @@ func TestClient_doRequest(t *testing.T) {
 					if req.Header.Get("Accept") != "application/json" {
 						t.Error("expected Accept header to be set")
 					}
-					
+
 					if tt.body != nil && req.Header.Get("Content-Type") != "application/json" {
 						t.Error("expected Content-Type header to be set for requests with body")
 					}
@@ -421,7 +421,7 @@ func TestClient_ListKeys(t *testing.T) {
 					"algorithm":  "ES256",
 				},
 				{
-					"id":         "key-2", 
+					"id":         "key-2",
 					"created_at": "2023-01-02T12:00:00Z",
 					"algorithm":  "ES256",
 				},
@@ -604,9 +604,9 @@ func TestClient_GetPublicKey(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:      "request failure",
-			keyID:     "key-123",
-			mockError: fmt.Errorf("network error"),
+			name:        "request failure",
+			keyID:       "key-123",
+			mockError:   fmt.Errorf("network error"),
 			expectError: true,
 		},
 	}
@@ -674,7 +674,7 @@ func TestClient_SignSBOM(t *testing.T) {
 			name:  "successful SBOM signing",
 			keyID: "key-123",
 			sbom:  map[string]string{"name": "test-sbom"},
-			mockResponse: createMockResponse(200, SignResult{
+			mockResponse: createMockResponse(200, SignResultAPIResponse{
 				"signed_sbom": map[string]interface{}{"signed": true},
 				"signature":   "signature-data",
 				"algorithm":   "ES256",
@@ -695,10 +695,10 @@ func TestClient_SignSBOM(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:      "request failure",
-			keyID:     "key-123",
-			sbom:      map[string]string{"name": "test-sbom"},
-			mockError: fmt.Errorf("network error"),
+			name:        "request failure",
+			keyID:       "key-123",
+			sbom:        map[string]string{"name": "test-sbom"},
+			mockError:   fmt.Errorf("network error"),
 			expectError: true,
 		},
 	}
@@ -777,10 +777,10 @@ func TestClient_VerifySBOM(t *testing.T) {
 			name:       "successful SBOM verification",
 			keyID:      "key-123",
 			signedSBOM: map[string]interface{}{"signed": true},
-			mockResponse: createMockResponse(200, VerifyResult{
+			mockResponse: createMockResponse(200, VerifyResultCMDResponse{
 				Valid:     true,
-				Message: "some message",
-				KeyID: "keyid",
+				Message:   "some message",
+				KeyID:     "keyid",
 				Timestamp: time.Now(),
 			}),
 			expectError: false,
@@ -798,10 +798,10 @@ func TestClient_VerifySBOM(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:       "request failure",
-			keyID:      "key-123",
-			signedSBOM: map[string]interface{}{"signed": true},
-			mockError:  fmt.Errorf("network error"),
+			name:        "request failure",
+			keyID:       "key-123",
+			signedSBOM:  map[string]interface{}{"signed": true},
+			mockError:   fmt.Errorf("network error"),
 			expectError: true,
 		},
 	}

@@ -5,7 +5,7 @@ import (
 )
 
 // GetSignatureValue returns the signature value as a string for convenience
-func (sr SignResult) GetSignatureValue() string {
+func (sr SignResultAPIResponse) GetSignatureValue() string {
 	if sig, ok := sr["signature"].(map[string]interface{}); ok {
 		if value, ok := sig["value"].(string); ok {
 			return value
@@ -15,7 +15,7 @@ func (sr SignResult) GetSignatureValue() string {
 }
 
 // GetSignatureAlgorithm returns the signature algorithm
-func (sr SignResult) GetSignatureAlgorithm() string {
+func (sr SignResultAPIResponse) GetSignatureAlgorithm() string {
 	if sig, ok := sr["signature"].(map[string]interface{}); ok {
 		if alg, ok := sig["algorithm"].(string); ok {
 			return alg
@@ -25,12 +25,12 @@ func (sr SignResult) GetSignatureAlgorithm() string {
 }
 
 // GetSignedSBOMBytes returns the complete signed SBOM as JSON bytes
-func (sr SignResult) GetSignedSBOMBytes() ([]byte, error) {
+func (sr SignResultAPIResponse) GetSignedSBOMBytes() ([]byte, error) {
 	return json.Marshal(sr)
 }
 
 // HasSignature returns true if the SBOM contains a signature
-func (sr SignResult) HasSignature() bool {
+func (sr SignResultAPIResponse) HasSignature() bool {
 	_, ok := sr["signature"]
 	return ok
 }

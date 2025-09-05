@@ -2,10 +2,10 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
-	"encoding/json"
 
 	"github.com/interlynk-io/sbomasm/pkg/securesbom"
 	"github.com/spf13/cobra"
@@ -14,42 +14,44 @@ import (
 // verifyCmd represents the verify command
 var verifyCmd = &cobra.Command{
 	Use:   "verify",
-	Short: "Verify a signed SBOM using Secure SBOM API",
+	Short: "Verifies a signed SBOM using ShiftLeftCyber's SecureSBOM API",
 	Long: `Verify the authenticity and integrity of a signed SBOM document.
 
-The verify command takes a signed SBOM file, sends it to the Secure SBOM API
-for verification, and reports whether the signature is valid. This ensures
+This service requires an API key to access ShiftLeftCybers's SecureSBOM solution. To obtain an API
+Key use the following link: https://shiftleftcyber.io/contactus
+
+The verify command takes a signed SBOM file, sends it to the SecureSBOM API
+for verification, and reports whether the signature is cryptographically valid. This ensures
 the SBOM hasn't been tampered with since it was signed.
 
 Examples:
   # Verify a signed SBOM
-  sbomasm verify --sbom signed-sbom.json --key-id my-key-123 --api-key $API_KEY
-
-  # Verify from stdin
-  cat signed-sbom.json | sbomasm verify --key-id my-key-123 --api-key $API_KEY
+  sbomasm verify --key-id my-key-123 --api-key $API_KEY signed-sbom.json
 
   # Verify with environment variable for API key
   export SECURE_SBOM_API_KEY=your-api-key
-  sbomasm verify --sbom signed-sbom.json --key-id my-key-123
+  sbomasm verify --key-id my-key-123 signed-sbom.json
 
   # Verify with custom API endpoint
-  sbomasm verify --sbom signed-sbom.json --key-id my-key-123 --base-url https://custom.api.com
+  sbomasm verify --key-id my-key-123 --base-url https://custom.api.com signed-sbom.json
 
   # Verify with JSON output for automation
-  sbomasm verify --sbom signed-sbom.json --key-id my-key-123 --output json`,
-	RunE: runVerifyCommand,
+  sbomasm verify --key-id my-key-123 --output json signed-sbom.json`,
+	Args:         cobra.ExactArgs(1),
+	SilenceUsage: true,
+	PreRunE:      validateVerifyFlags,
+	RunE:         runVerifyCommand,
 }
 
 // Verify command flags
 var (
-	verifySBOMPath   string
-	verifyKeyID      string
-	verifyAPIKey     string
-	verifyBaseURL    string
+	verifyKeyID        string
+	verifyAPIKey       string
+	verifyBaseURL      string
 	verifyOutputFormat string
-	verifyTimeout    time.Duration
-	verifyRetryCount int
-	verifyQuiet      bool
+	verifyTimeout      time.Duration
+	verifyRetryCount   int
+	verifyQuiet        bool
 )
 
 // VerificationOutput represents the CLI output structure
@@ -67,7 +69,6 @@ func init() {
 	rootCmd.AddCommand(verifyCmd)
 
 	// Required flags
-	verifyCmd.Flags().StringVar(&verifySBOMPath, "sbom", "", "Path to signed SBOM file (use '-' for stdin)")
 	verifyCmd.Flags().StringVar(&verifyKeyID, "key-id", "", "Key ID used to sign the SBOM")
 
 	// Authentication flags
@@ -90,6 +91,18 @@ func init() {
 }
 
 func validateVerifyFlags(cmd *cobra.Command, args []string) error {
+	// Validate input file argument
+	if len(args) == 0 {
+		return fmt.Errorf("input file is required")
+	}
+
+	// Check if input file exists (unless it's stdin)
+	if args[0] != "-" {
+		if _, err := os.Stat(args[0]); err != nil {
+			return fmt.Errorf("invalid input file: %v", err)
+		}
+	}
+
 	// Validate key ID
 	if verifyKeyID == "" {
 		return fmt.Errorf("--key-id is required")
@@ -135,8 +148,8 @@ func runVerifyCommand(cmd *cobra.Command, args []string) error {
 	if !verifyQuiet {
 		fmt.Fprintf(os.Stderr, "Loading signed SBOM...\n")
 	}
-	
-	signedSBOM, err := loadSBOMForVerification()
+
+	signedSBOM, err := loadSBOMForVerification(args[0])
 	if err != nil {
 		return fmt.Errorf("failed to load signed SBOM: %w", err)
 	}
@@ -145,7 +158,7 @@ func runVerifyCommand(cmd *cobra.Command, args []string) error {
 	if !verifyQuiet {
 		fmt.Fprintf(os.Stderr, "Connecting to Secure SBOM API...\n")
 	}
-	
+
 	if err := client.HealthCheck(ctx); err != nil {
 		return fmt.Errorf("API health check failed: %w", err)
 	}
@@ -154,7 +167,7 @@ func runVerifyCommand(cmd *cobra.Command, args []string) error {
 	if !verifyQuiet {
 		fmt.Fprintf(os.Stderr, "Verifying SBOM signature with key %s...\n", verifyKeyID)
 	}
-	
+
 	result, err := client.VerifySBOM(ctx, verifyKeyID, signedSBOM.Data())
 	if err != nil {
 		return fmt.Errorf("failed to verify SBOM: %w", err)
@@ -204,17 +217,15 @@ func createVerifyClient() (securesbom.ClientInterface, error) {
 	return baseClient, nil
 }
 
-func loadSBOMForVerification() (*securesbom.SBOM, error) {
-	if verifySBOMPath == "" || verifySBOMPath == "-" {
-		// Read from stdin
+func loadSBOMForVerification(inputFile string) (*securesbom.SBOM, error) {
+	if inputFile == "-" {
 		return securesbom.LoadSBOMFromReader(os.Stdin)
 	}
 
-	// Read from file
-	return securesbom.LoadSBOMFromFile(verifySBOMPath)
+	return securesbom.LoadSBOMFromFile(inputFile)
 }
 
-func outputVerificationResult(result *securesbom.VerifyResult) error {
+func outputVerificationResult(result *securesbom.VerifyResultCMDResponse) error {
 	output := VerificationOutput{
 		Valid:     result.Valid,
 		Message:   result.Message,

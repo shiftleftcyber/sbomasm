@@ -1,57 +1,55 @@
 package securesbom
 
 import (
-	"time"
 	"net/http"
+	"time"
 )
 
 // Config holds configuration for the Secure SBOM API client
 type Config struct {
-	BaseURL string
-	APIKey string
+	BaseURL    string
+	APIKey     string
 	HTTPClient HTTPClient
-	Timeout time.Duration
-	UserAgent string
+	Timeout    time.Duration
+	UserAgent  string
 }
 
 type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// Keep GeneratedKey as the single key type
-type GeneratedKey struct {
+// SecureSBOM Keys
+
+type GenerateKeyCMDResponse struct {
 	ID        string    `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	Algorithm string    `json:"algorithm"`
-	PublicKey string    `json:"public_key,omitempty"` // Only populated for new keys
+	PublicKey string    `json:"public_key,omitempty"`
 }
 
 type KeyListResponse struct {
-	Keys []GeneratedKey `json:"keys"` // Changed from []Key to []GeneratedKey
+	Keys []GenerateKeyCMDResponse `json:"keys"`
 }
 
-// Internal API response types (keep these for parsing)
-type apiKeyListItem struct {
+type ListKeysAPIResponse struct {
 	ID        string    `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	Algorithm string    `json:"algorithm"`
 }
 
-type apiGenerateKeyResponse struct {
+type GenerateKeyAPIReponse struct {
 	KeyID     string `json:"key_id"`
 	PublicKey string `json:"public_key"`
 }
 
-// GenerateKeyResponse represents the response from generating a new key
-type GenerateKeyResponse struct {
-	KeyID     string `json:"key_id"`
-	PublicKey string `json:"public_key"`
-}
+// Signing
 
-type SignResult map[string]interface{}
+// intentenoly do not define a type for a sign result since we need to support many different types of sboms/reponses
+type SignResultAPIResponse map[string]interface{}
 
-// VerifyResult contains the result of a verify operation
-type VerifyResult struct {
+// verification
+
+type VerifyResultCMDResponse struct {
 	Valid     bool      `json:"valid"`
 	Message   string    `json:"message,omitempty"`
 	KeyID     string    `json:"key_id,omitempty"`
@@ -59,8 +57,7 @@ type VerifyResult struct {
 	Timestamp time.Time `json:"timestamp,omitempty"`
 }
 
-// APIVerifyResponse represents the actual API response structure
-type APIVerifyResponse struct {
+type VerifyResultAPIResponse struct {
 	Message   string `json:"message"`
 	KeyID     string `json:"key_id"`
 	Algorithm string `json:"algorithm"`

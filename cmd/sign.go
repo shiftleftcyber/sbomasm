@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
-	"time"
 	"path/filepath"
-	"encoding/json"
+	"time"
 
 	"github.com/interlynk-io/sbomasm/pkg/securesbom"
 	"github.com/spf13/cobra"
@@ -16,32 +16,29 @@ import (
 var signCmd = &cobra.Command{
 	Use:   "sign",
 	Short: "Sign an SBOM using ShiftLeftCyber's SecureSBOM API",
-	Long: `Sign an SBOM document using a cryptographic key from the ShiftLeftCyber's SecureSBOM service.
+	Long: `Sign an SBOM using a cryptographic key from the ShiftLeftCyber's SecureSBOM API service. Utilizez the CycloneDX Signature Specification or a detached signature for SPDX types.
 
-This service requires an API key to access ShiftLeftCybers's SecureSBOM solution. To obtain an API
+This service requires an API key to access ShiftLeftCybers's SecureSBOM API. To obtain an API
 Key use the following link: https://shiftleftcyber.io/contactus
 
-The sign command takes an SBOM file, sends it to the Secure SBOM API for signing,
-and outputs the signed SBOM. The signing process adds cryptographic proof of
+The sign command takes an SBOM file, sends it to the Secure SBOM API for signing.
+The output is the signed SBOM. The signing process adds cryptographic proof of
 authenticity and integrity to the SBOM.
 
 Examples:
   # Sign an SBOM with a specific key
   sbomasm sign --key-id my-key-123 --api-key $API_KEY sbom.json
 
-  # Sign from stdin and output to stdout
-  cat sbom.json | sbomasm sign --key-id my-key-123 --api-key $API_KEY
-
   # Sign with environment variable for API key
   export SECURE_SBOM_API_KEY=your-api-key
   sbomasm sign --key-id my-key-123 --output signed-sbom.json sbom.json
 
   # Sign with custom API endpoint
-  sbomasm sign --key-id my-key-123 --base-url https://custom.api.com sbom.json`, 
-  	Args:         cobra.ExactArgs(1),
-  	SilenceUsage: true,
-  	PreRunE:      validateSignFlags,
-  	RunE:         runSignCommand,	
+  sbomasm sign --key-id my-key-123 --base-url https://custom.api.com sbom.json`,
+	Args:         cobra.ExactArgs(1),
+	SilenceUsage: true,
+	PreRunE:      validateSignFlags,
+	RunE:         runSignCommand,
 }
 
 // Sign command flags
@@ -89,7 +86,7 @@ func validateSignFlags(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("invalid input file: %v", err)
 		}
 	}
-	
+
 	// Validate key ID
 	if signKeyID == "" {
 		return fmt.Errorf("--key-id is required")
@@ -130,7 +127,7 @@ func runSignCommand(cmd *cobra.Command, args []string) error {
 	if !signQuiet {
 		fmt.Fprintf(os.Stderr, "Loading SBOM...\n")
 	}
-	
+
 	sbom, err := loadSBOMForSigning(args[0])
 	if err != nil {
 		return fmt.Errorf("failed to load SBOM: %w", err)
@@ -140,7 +137,7 @@ func runSignCommand(cmd *cobra.Command, args []string) error {
 	if !signQuiet {
 		fmt.Fprintf(os.Stderr, "Connecting to Secure SBOM API...\n")
 	}
-	
+
 	if err := client.HealthCheck(ctx); err != nil {
 		return fmt.Errorf("API health check failed: %w", err)
 	}
@@ -149,7 +146,7 @@ func runSignCommand(cmd *cobra.Command, args []string) error {
 	if !signQuiet {
 		fmt.Fprintf(os.Stderr, "Signing SBOM with key %s...\n", signKeyID)
 	}
-	
+
 	result, err := client.SignSBOM(ctx, signKeyID, sbom.Data())
 	if err != nil {
 		return fmt.Errorf("failed to sign SBOM: %w", err)
@@ -162,17 +159,16 @@ func runSignCommand(cmd *cobra.Command, args []string) error {
 
 	// Success message and metadata
 	if !signQuiet {
-		fmt.Fprintf(os.Stderr, "✓ SBOM successfully signed\n")
-		
-		// Show signature info
+		fmt.Fprintf(os.Stderr, "\n\nSBOM successfully signed\n")
+
 		if signature := result.GetSignatureValue(); signature != "" {
 			fmt.Fprintf(os.Stderr, "  Signature: %s\n", truncateString(signature, 50))
 		}
-		
+
 		if algorithm := result.GetSignatureAlgorithm(); algorithm != "" {
 			fmt.Fprintf(os.Stderr, "  Algorithm: %s\n", algorithm)
 		}
-		
+
 		// Show where output was written
 		if signOutput != "" {
 			fmt.Fprintf(os.Stderr, "  Output: %s\n", signOutput)
@@ -223,7 +219,7 @@ func loadSBOMForSigning(inputFile string) (*securesbom.SBOM, error) {
 }
 
 // outputSignedSBOM writes the signed SBOM to the specified output location with pretty formatting
-func outputSignedSBOM(result *securesbom.SignResult) error {
+func outputSignedSBOM(result *securesbom.SignResultAPIResponse) error {
 	// Pretty-print the JSON with indentation
 	prettyJSON, err := json.MarshalIndent(*result, "", "  ")
 	if err != nil {
